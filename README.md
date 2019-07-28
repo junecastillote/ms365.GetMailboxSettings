@@ -1,2 +1,3 @@
 # ms365.GetMailboxSettings
- Retrieve Mailbox Settings using MS Graph API calls. Recommended if there's a large number of users to process.
+ For the article, please go to:
+https://lazyexchangeadmin.com/retrieve-office365-mailbox-settings-using-ms-graph-api-and-powershell/
