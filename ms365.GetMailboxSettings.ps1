@@ -44,7 +44,7 @@
 .SYNOPSIS
     Retrieve Office 365 Mailbox Settings using MS Graph API calls
 .EXAMPLE
-    PS C:\> $mailboxSettings = .\ms365.GetMailboxSettings.ps1 -ClientID <clientID> -ClientSecret <clientSecret> -tenantID <tenantID> -All
+    PS C:\> $mailboxSettings = .\ms365.GetMailboxSettings.ps1 -ClientID <clientID> -ClientSecret <clientSecret> -tenantID <tenantID>
     This example will authenticate with MS Graph API and retrieve ALL users' mailbox settings.
 .EXAMPLE
     PS C:\> $mailboxSettings = .\ms365.GetMailboxSettings.ps1 -ClientID <clientID> -ClientSecret <clientSecret> -tenantID <tenantID> -UserID "user1@domain.com","f37ff902-28f3-4195-8c59-ce8afacbfd35"
@@ -72,10 +72,7 @@ param (
 
     [Parameter()]
     [string[]]$userID, #Use userID to specify a user or an array of users to process.
-    #Cannot be used together with the 'All' switch
-    [Parameter()]
-    [switch]$All, #This is the default if userID is not specified.
-    #This will get All users from Azure AD with usertype 'member'
+    #Cannot be used together with the 'MaxPage' switch
 
     [Parameter()]
     [int]$MaxPage   #This puts a limit to how many pages of users will be retrieved by the All switch.
@@ -118,11 +115,6 @@ Function Get-oAuth {
 
 #...................................................................................
 #Region Parameter check
-#do not allow 'userID' and 'All' in the same set.
-if ($userID -and $All) {
-    Write-Host "userID and All cannot be used in the same set." -ForegroundColor Yellow
-    return $null
-}
 
 #do not allow 'userID' and 'Max' in the same set.
 if ($userID -and $MaxPage) {
@@ -130,8 +122,8 @@ if ($userID -and $MaxPage) {
     return $null
 }
 
-#if userID and All are not specified, default to All.
-if (!$userID -and !$All) {
+#if userID is not specified, default to All.
+if (!$userID) {
     $All = $true
 }
 #EndRegion Parameter check
@@ -146,7 +138,7 @@ if (!($oAuth = get-oAuth -ClientID $ClientID -ClientSecret $ClientSecret -Tenant
 
 #...................................................................................
 #Region Get All Users
-if ($All) {
+if ($All -eq $true) {
     try {		
         if ((Get-Date) -gt ($oauth.expireDateTime)) {
             #Get new token
