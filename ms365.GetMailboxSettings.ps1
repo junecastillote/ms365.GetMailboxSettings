@@ -38,7 +38,7 @@
     This can usually be achieved using the Exchange Online powershell session/commands. However, it is quite unreliable when
     when processing a large number of users - due to throtlling, data size limitation and session timeouts to name a few.
 
-    * This function utilize the MS Graph API calls which all goes through HTTPS.
+    * This function utilizes the MS Graph API calls which all go through HTTPS
     * Automatically renews the access token every 58 minutes to ensure that authorization is current and not expired.
     * Returns the final result as an object which can be manipulated, filtered, or exported to different formats as required.
 .SYNOPSIS
