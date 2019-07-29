@@ -71,7 +71,7 @@ param (
     [string]$TenantID, #TenantID - the Directory ID or domain of the tenant.
 
     [Parameter()]
-    [string[]]$userID, #Use userID to specify a user or an array of users to process.
+    $userID, #Use userID to specify a user or an array of users to process.
     #Cannot be used together with the 'MaxPage' switch
 
     [Parameter()]
@@ -149,7 +149,7 @@ if ($All -eq $true) {
             }
         }
         $userID = @()
-        $request = 'https://graph.microsoft.com/beta/users?$filter=usertype eq ''member''&$select=userPrincipalName,mail'
+        $request = 'https://graph.microsoft.com/beta/users?$filter=usertype eq ''member''&$select=userPrincipalName,mail,displayName'
         $result = Invoke-RestMethod -Method Get -Uri $request -Headers $oAuth.Token
         $userID += ($result.value | Where-Object { $_.mail -ne $null }).UserPrincipalName
         $nextLink = $result."@odata.nextLink"
@@ -164,7 +164,7 @@ if ($All -eq $true) {
             While ($page -ne $MaxPage) {
                 $page++         
                 $result = Invoke-RestMethod -Method Get -Uri $nextLink -Headers $oAuth.Token
-                $userID += ($result.value | Where-Object { $_.mail -ne $null }).UserPrincipalName
+                $userID += ($result.value | Where-Object { $_.mail -ne $null })
                 $nextLink = $result."@odata.nextLink"
                 Write-Progress -Activity "Getting users..." -Status "Page $page" -PercentComplete 90
             }
@@ -173,7 +173,7 @@ if ($All -eq $true) {
             While ($nextLink) {
                 $page++         
                 $result = Invoke-RestMethod -Method Get -Uri $nextLink -Headers $oAuth.Token
-                $userID += ($result.value | Where-Object { $_.mail -ne $null }).UserPrincipalName
+                $userID += ($result.value | Where-Object { $_.mail -ne $null })
                 $nextLink = $result."@odata.nextLink"            
                 Write-Progress -Activity "Getting users..." -Status "Page $page" -PercentComplete 90
             }
@@ -203,17 +203,28 @@ foreach ($id in $userID) {
             Return $null
         }
     }
-	
     $percentComplete = [int]($index / $userCount * 100)
-    Write-Progress -Activity "Processing..." -Status "($index of $userCount [$percentComplete%]) - $id)" -PercentComplete ($index / $userCount * 100)	
-    $request = "https://graph.microsoft.com/beta/users/$id/mailboxSettings"
+    Write-Progress -Activity "Processing..." -Status "($index of $userCount [$percentComplete%]) - $($id.UserPrincipalName))" -PercentComplete ($index / $userCount * 100)	
+    $request = "https://graph.microsoft.com/beta/users/$($id.UserPrincipalName)/mailboxSettings"
     try {
         $settings = Invoke-RestMethod -Method Get -Uri $request -Headers $oAuth.Token
-        $settings | Add-Member -Name UserPrincipalName -MemberType NoteProperty -Value $id
+        $settings | Add-Member -Name UserPrincipalName -MemberType NoteProperty -Value $id.UserPrincipalName
+        $settings | Add-Member -Name displayName -MemberType NoteProperty -Value $id.displayName
+
+        if ($id.mail) {
+            $settings | Add-Member -Name mail -MemberType NoteProperty -Value $id.mail
+        }
+        elseif ($id.PrimarySMTPAddress){
+            $settings | Add-Member -Name mail -MemberType NoteProperty -Value $id.PrimarySMTPAddress
+        }
+        else {
+            $settings | Add-Member -Name mail -MemberType NoteProperty -Value $null
+        }
+        
         $mailboxSettings += $settings
     }
     catch {
-        Write-Host "$id - $($_.exception.Message)" -ForegroundColor Yellow
+        Write-Host "$($id.UserPrincipalName) - $($_.exception.Message)" -ForegroundColor Yellow
     }
     $index++
 }
