@@ -193,6 +193,7 @@ if ($All -eq $true) {
 $userCount = ([array]$userID).Count
 $mailboxSettings = @()
 $index = 1
+
 foreach ($id in $userID) {
 	
     if ((Get-Date) -gt ($oauth.expireDateTime)) {
@@ -205,7 +206,14 @@ foreach ($id in $userID) {
     }
     $percentComplete = [int]($index / $userCount * 100)
     Write-Progress -Activity "Processing..." -Status "($index of $userCount [$percentComplete%]) - $($id.UserPrincipalName))" -PercentComplete ($index / $userCount * 100)	
-    $request = "https://graph.microsoft.com/beta/users/$($id.UserPrincipalName)/mailboxSettings"
+    if ((($userid | Get-Member)[0]).TypeName -eq 'System.String')
+    {
+        $request = "https://graph.microsoft.com/beta/users/$id/mailboxSettings"
+    }
+    elseif ((($userid | Get-Member)[0]).TypeName -match 'Microsoft.Exchange.Data.Directory.Management.Mailbox') {
+        $request = "https://graph.microsoft.com/beta/users/$($id.UserPrincipalName)/mailboxSettings"
+    }
+
     try {
         $settings = Invoke-RestMethod -Method Get -Uri $request -Headers $oAuth.Token
         $settings | Add-Member -Name UserPrincipalName -MemberType NoteProperty -Value $id.UserPrincipalName
@@ -216,6 +224,9 @@ foreach ($id in $userID) {
         }
         elseif ($id.PrimarySMTPAddress){
             $settings | Add-Member -Name mail -MemberType NoteProperty -Value $id.PrimarySMTPAddress
+        }
+        elseif ((($userid | Get-Member)[0]).TypeName -eq 'System.String')  {
+            $settings | Add-Member -Name mail -MemberType NoteProperty -Value $id
         }
         else {
             $settings | Add-Member -Name mail -MemberType NoteProperty -Value $null
