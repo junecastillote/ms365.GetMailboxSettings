@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 1.0
+.VERSION 1.1
 
 .GUID e465e748-b3f7-46bb-b0c8-39d945c4b26b
 
@@ -151,7 +151,7 @@ if ($All -eq $true) {
         $userID = @()
         $request = 'https://graph.microsoft.com/beta/users?$filter=usertype eq ''member''&$select=userPrincipalName,mail,displayName'
         $result = Invoke-RestMethod -Method Get -Uri $request -Headers $oAuth.Token
-        $userID += ($result.value | Where-Object { $_.mail -ne $null }).UserPrincipalName
+        $userID += ($result.value | Where-Object { $_.mail -ne $null })
         $nextLink = $result."@odata.nextLink"
         $page = 1
 
@@ -190,12 +190,32 @@ if ($All -eq $true) {
 #...................................................................................
 #Region Get Mailbox Settings
 #store count of userId. These Ids may or may not have a mailbox.
+
+$tempIDCollection = @()
+<#if ((($userID | Get-Member)[0]).TypeName -notmatch 'Microsoft.Exchange.Data.Directory.Management.Mailbox' `
+        -and (!$userID[0].Mail -or !$userID[0].PrimarySMTPAddress -or !$userID[0].UserPrincipalName ))#> 
+    if (!$userID[0].UserPrincipalName){
+            foreach ($id in $userID) {
+                try {
+                    $request = ('https://graph.microsoft.com/beta/users/'+$id+'/?$select=UserPrincipalName,displayName,mail')
+
+                    $result = Invoke-RestMethod -Method Get -Uri $request -Headers $oAuth.Token
+                    $tempIDCollection += $result      
+                }
+                catch {
+                    Write-Host "GetUser: $($id) - $($_.exception.Message)" -ForegroundColor Yellow
+                }
+            }
+            $userID = $tempIDCollection       
+        }   
+
 $userCount = ([array]$userID).Count
 $mailboxSettings = @()
 $index = 1
 
 foreach ($id in $userID) {
-	
+    
+    #Token check
     if ((Get-Date) -gt ($oauth.expireDateTime)) {
         #Get new token
         Write-Host "Renew token" -ForegroundColor Yellow
@@ -204,15 +224,11 @@ foreach ($id in $userID) {
             Return $null
         }
     }
+
     $percentComplete = [int]($index / $userCount * 100)
     Write-Progress -Activity "Processing..." -Status "($index of $userCount [$percentComplete%]) - $($id.UserPrincipalName))" -PercentComplete ($index / $userCount * 100)	
-    if ((($userid | Get-Member)[0]).TypeName -eq 'System.String')
-    {
-        $request = "https://graph.microsoft.com/beta/users/$id/mailboxSettings"
-    }
-    elseif ((($userid | Get-Member)[0]).TypeName -match 'Microsoft.Exchange.Data.Directory.Management.Mailbox') {
-        $request = "https://graph.microsoft.com/beta/users/$($id.UserPrincipalName)/mailboxSettings"
-    }
+    $request = "https://graph.microsoft.com/beta/users/$($id.UserPrincipalName)/mailboxSettings"
+
 
     try {
         $settings = Invoke-RestMethod -Method Get -Uri $request -Headers $oAuth.Token
@@ -222,26 +238,22 @@ foreach ($id in $userID) {
         if ($id.mail) {
             $settings | Add-Member -Name mail -MemberType NoteProperty -Value $id.mail
         }
-        elseif ($id.PrimarySMTPAddress){
+        elseif ($id.PrimarySMTPAddress) {
             $settings | Add-Member -Name mail -MemberType NoteProperty -Value $id.PrimarySMTPAddress
-        }
-        elseif ((($userid | Get-Member)[0]).TypeName -eq 'System.String')  {
-            $settings | Add-Member -Name mail -MemberType NoteProperty -Value $id
         }
         else {
             $settings | Add-Member -Name mail -MemberType NoteProperty -Value $null
-        }
-        
+        }        
         $mailboxSettings += $settings
     }
     catch {
-        Write-Host "$($id.UserPrincipalName) - $($_.exception.Message)" -ForegroundColor Yellow
+        Write-Host "GetSettings: $($id.UserPrincipalName) - $($_.exception.Message)" -ForegroundColor Yellow
     }
     $index++
 }
 #EndRegion Get Mailbox Settings
 #...................................................................................
 Write-Progress -Activity "Completed." -Status "Done" -PercentComplete 100 -Completed
+remove-variable id,userID,userCount,tempIDCollection
+
 return $mailboxSettings
-
-
